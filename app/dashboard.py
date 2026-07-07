@@ -97,6 +97,31 @@ def serve(cfg, port: int = 8000):
             finally:
                 conn.close()
 
+        def do_POST(self):
+            path = urlparse(self.path).path
+            if path != "/api/employees":
+                self._json({"error": "not found"}, 404)
+                return
+            try:
+                length = int(self.headers.get("content-length", 0))
+                body = json.loads(self.rfile.read(length) or b"{}")
+            except (ValueError, json.JSONDecodeError):
+                self._json({"error": "invalid JSON"}, 400)
+                return
+            code = str(body.get("code", "")).strip()
+            name = str(body.get("name", "")).strip()
+            if not code or not name:
+                self._json({"error": "code and name required"}, 400)
+                return
+            conn = dbm.connect(db_path)
+            try:
+                emp_id = dbm.add_employee(conn, code, name)
+                self._json({"id": emp_id, "code": code, "name": name}, 201)
+            except Exception:
+                self._json({"error": f"employee code {code!r} already exists"}, 400)
+            finally:
+                conn.close()
+
     with ThreadingHTTPServer(("127.0.0.1", port), Handler) as httpd:
         print(f"dashboard: http://127.0.0.1:{port}  (Ctrl+C to stop)")
         try:
@@ -146,6 +171,10 @@ PAGE = """<!doctype html>
   .pill.buffer { background: rgba(240,168,64,.15);  color: var(--warn); }
   .pill.reject { background: rgba(239,93,93,.15);   color: var(--bad); }
   .note { color: var(--muted); font-size: 13px; margin: 10px 2px; }
+  form.inline { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  input, button.primary { border-radius: 8px; border: 1px solid var(--border); background: #10151d;
+    color: var(--text); padding: 9px 12px; font-size: 14px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #08111f; font-weight: 600; cursor: pointer; }
   .view { display: none; } .view.active { display: block; }
 </style>
 </head>
@@ -180,9 +209,13 @@ PAGE = """<!doctype html>
 
     <section id="employees" class="view">
       <h2>Employees</h2>
-      <p class="note">Add and enroll via the CLI:
-        <code>python -m app add-employee --code E001 --name "..."</code> then
-        <code>python -m app enroll --code E001</code></p>
+      <form class="inline" id="f-emp">
+        <input id="f-code" placeholder="Code (E001)" required>
+        <input id="f-name" placeholder="Full name" required>
+        <button class="primary" type="submit">Add employee</button>
+      </form>
+      <p class="note" id="emp-msg">After adding, enroll their face at the kiosk:
+        <code>python -m app enroll --code E001</code> (webcam capture can't run from the browser).</p>
       <div class="tablewrap"><table id="t-emp">
         <thead><tr><th>Code</th><th>Name</th><th>Status</th><th>Embeddings</th><th>Registered</th></tr></thead>
         <tbody></tbody></table></div>
@@ -267,6 +300,29 @@ PAGE = """<!doctype html>
   }
   refresh();
   setInterval(refresh, 3000);
+
+  document.getElementById('f-emp').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    fetch('/api/employees', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code: document.getElementById('f-code').value.trim(),
+        name: document.getElementById('f-name').value.trim(),
+      }),
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (r) {
+        var msg = document.getElementById('emp-msg');
+        if (r.ok) {
+          ev.target.reset();
+          msg.textContent = 'Added ' + r.data.code + '. Now enroll their face at the kiosk: ' +
+            'python -m app enroll --code ' + r.data.code;
+          refresh();
+        } else {
+          msg.textContent = r.data.error || 'failed to add employee';
+        }
+      });
+  });
 })();
 </script>
 </body>
