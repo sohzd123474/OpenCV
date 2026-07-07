@@ -5,7 +5,8 @@
   python -m app run [--camera 0]           # live recognition + attendance
   python -m app list
   python -m app report [--from 2026-07-01] [--to 2026-07-31] [--csv out.csv]
-  python -m app sync                       # push unsynced events to the dashboard
+  python -m app dashboard [--port 8000]    # local web dashboard (stdlib only)
+  python -m app sync                       # push unsynced events to the cloud dashboard
   python -m app config                     # print effective configuration
 """
 import argparse
@@ -231,6 +232,11 @@ def cmd_sync(cfg, _args):
     print(f"synced {pushed}/{len(events)} events to {cfg.worker_url}")
 
 
+def cmd_dashboard(cfg, args):
+    from .dashboard import serve
+    serve(cfg, args.port)
+
+
 def cmd_config(cfg, _args):
     print(config_mod.dump(cfg))
 
@@ -268,6 +274,10 @@ def main(argv=None):
 
     p = sub.add_parser("sync")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("dashboard")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=cmd_dashboard)
 
     p = sub.add_parser("config")
     p.set_defaults(func=cmd_config)

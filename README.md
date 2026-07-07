@@ -18,7 +18,12 @@ python -m app add-employee --code E001 --name "Ada Lovelace"
 python -m app enroll --code E001         # captures 8 reference poses from the webcam
 python -m app run                        # live recognition -> check-in/check-out
 python -m app report --csv july.csv      # export attendance
+python -m app dashboard                  # local web dashboard at http://127.0.0.1:8000
 ```
+
+The local dashboard needs nothing beyond Python — run it in a second terminal while
+the kiosk is live and watch check-ins, employees, and the match-attempt audit
+(match/buffer/reject mix, similarity, margin, quality) refresh in real time.
 
 Configuration (thresholds, camera, dashboard URL) lives in `config.json` —
 see `python -m app config` for all fields and defaults.
@@ -71,7 +76,8 @@ app/            kiosk application: pipeline, matcher, SQLite storage, CLI
   pipeline.py   YuNet detect -> quality gate -> CLAHE low-light -> SFace embed
   matcher.py    three-zone decision engine (accept / buffer / reject + margin)
   db.py         local storage (employees, embeddings, attempts, attendance)
-  cli.py        add-employee / enroll / run / report / sync
+  dashboard.py  local web dashboard (stdlib http.server, reads the same SQLite)
+  cli.py        add-employee / enroll / run / report / dashboard / sync
 worker.js       Cloudflare Worker: dashboard UI + API + AI tutor (/api/copilot)
 wrangler.toml   worker config: LM vars, Secrets Store token binding, optional D1
 db/schema.sql   production-grade PostgreSQL schema (design target)
